@@ -24,7 +24,7 @@ with io.open(os.path.join(CURDIR, "README.md"), "r", encoding="utf-8") as f:
 
 
 def get_version() -> str:
-    main_file = CURDIR / "pyxtermjs" / "app.py"
+    main_file = CURDIR / "pyxtermjs" / "router.py"
     _version_re = re.compile(r"__version__\s+=\s+(?P<version>.*)")
     with open(main_file, "r", encoding="utf8") as f:
         match = _version_re.search(f.read())

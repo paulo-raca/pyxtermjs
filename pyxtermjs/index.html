@@ -29,15 +29,13 @@
     <script src="https://unpkg.com/xterm@4.11.0/lib/xterm.js"></script>
     <script src="https://unpkg.com/xterm-addon-fit@0.5.0/lib/xterm-addon-fit.js"></script>
     <script src="https://unpkg.com/xterm-addon-web-links@0.4.0/lib/xterm-addon-web-links.js"></script>
-    <script src="https://unpkg.com/xterm-addon-search@0.8.0/lib/xterm-addon-sear
-ch.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <script src="https://unpkg.com/xterm-addon-search@0.8.0/lib/xterm-addon-search.js"></script>
 
     <script>
       const term = new Terminal({
         cursorBlink: true,
         macOptionIsMeta: true,
-        scrollback: true,
+        scrollback: 1000,
       });
       // https://github.com/xtermjs/xterm.js/issues/2941
       const fit = new FitAddon.FitAddon();
@@ -50,37 +48,51 @@ ch.js"></script>
       term.resize(15, 50);
       console.log(`size: ${term.cols} columns, ${term.rows} rows`);
       fit.fit();
-      term.writeln("Welcome to pyxterm.js!");
-      term.writeln("https://github.com/cs01/pyxterm.js");
+      term.writeln("Welcome to pauloxterm.js!");
       term.onData((data) => {
-        console.log("key pressed in browser:", data);
-        socket.emit("pty-input", { input: data });
+        websocket.send(new Blob([data]))
       });
+      term.onBinary((data) => {
+        websocket.send(new Blob([data]))
+      });
+      
+      window_url = new URL(window.location.href);
+      websocket_url = new URL(window.location.href);
+      websocket_url.protocol = websocket_url.protocol.replace(/^(http)(s)?\:/, "ws$2:");
+      websocket_url.searchParams.set('winsize', `${term.rows} ${term.cols} 0 0`);
 
-      const socket = io.connect("/pty");
+      const websocket = new WebSocket(websocket_url);
+      websocket.binaryType = 'arraybuffer';
       const status = document.getElementById("status");
+      status.innerHTML = '<span style="background-color: lightgreen;">connected</span>';status.innerHTML = '<span style="background-color: lightgreen;">connected</span>';
 
-      socket.on("pty-output", function (data) {
-        console.log("new output received from server:", data.output);
-        term.write(data.output);
-      });
+      websocket.onmessage = function(event) {
+        if (typeof event.data === 'string') {
+          data = JSON.parse(event.data)
+          exitcode = data["exitcode"]
+          if (exitcode !== undefined) {
+            term.write(`\r\nCompleted with code ${exitcode}`)
+          }
+        } else {
+          data = new Uint8Array(event.data)
+          term.write(data)
+        }
+        
+      }
 
-      socket.on("connect", () => {
+      websocket.onopen = function(e) {
         fitToscreen();
-        status.innerHTML =
-          '<span style="background-color: lightgreen;">connected</span>';
-      });
+        status.innerHTML = '<span style="background-color: lightgreen;">connected</span>';
+      }
 
-      socket.on("disconnect", () => {
-        status.innerHTML =
-          '<span style="background-color: #ff8383;">disconnected</span>';
-      });
+      websocket.onclose = function(event) {
+        status.innerHTML = '<span style="background-color: #ff8383;">disconnected</span>';
+        term.write(`\r\nConnection lost`)
+      }
 
       function fitToscreen() {
         fit.fit();
-        const dims = { cols: term.cols, rows: term.rows };
-        console.log("sending new dimensions to server's pty", dims);
-        socket.emit("resize", dims);
+        websocket.send(JSON.stringify({resize: { col: term.cols, row: term.rows }}))
       }
 
       function debounce(func, wait_ms) {
@@ -92,7 +104,7 @@ ch.js"></script>
         };
       }
 
-      const wait_ms = 50;
+      const wait_ms = 10;
       window.onresize = debounce(fitToscreen, wait_ms);
     </script>
   </body>
